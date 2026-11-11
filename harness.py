@@ -587,7 +587,7 @@ def cmd_scan(args: argparse.Namespace, store: Store) -> int:
     all_signals: List[Signal] = []
 
     # File integrity
-    if args.paths or not (args.input or args.auth_log):
+    if args.paths or not (args.input or args.auth_log or args.mcp_log or args.music_scan_dir or args.clap_scan_dir or args.audio_scan_dir or args.audio_call_log):
         roots = [Path(p) for p in (args.paths or ["."])]
         fi = FileIntegrityAdapter(Path(args.baseline) if args.baseline else DEFAULT_BASELINE)
         all_signals.extend(fi.scan(roots))
