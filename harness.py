@@ -635,9 +635,10 @@ def cmd_scan(args: argparse.Namespace, store: Store) -> int:
         print(f"Finding #{fid}  score={finding.score:.2f}  tier={finding.tier}  surface=ai_music_mcp  rule={finding.rule_id}")
         print(f"  {finding.guidance}")
 
-    if not all_signals and not mcp_findings:
-        print("No signals.")
-        store.audit.append("scan", {"signals": 0, "findings": 0})
+    if not all_signals:
+        if not mcp_findings:
+            print("No signals.")
+            store.audit.append("scan", {"signals": 0, "findings": 0})
         return 0
 
     # Group into a single finding for simplicity; real deployments may split by source

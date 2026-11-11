@@ -172,7 +172,11 @@ def _pip_install_is_unpinned(line: str) -> bool:
     if not re.search(r"(?:\bpip(?:3)?\s+install\b|\bpython(?:\d+(?:\.\d+)?)?\s+-m\s+pip\s+install\b)",clean): return False
     if "--require-hashes" in clean: return False
     package_tokens=[token for token in clean.split() if not token.startswith("-")]
-    return not any(PIN_RE.search(token) for token in package_tokens)
+    if not package_tokens:
+        return True
+    # Every explicit package spec must be pinned; one pinned dependency must
+    # not mask another unpinned dependency on the same command line.
+    return any(not PIN_RE.search(token) for token in package_tokens if token not in {"pip", "install"})
 
 def scan_static_tree(root: Path) -> List[Dict[str,Any]]:
     findings=[]
