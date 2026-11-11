@@ -18,4 +18,4 @@
 - Fix C simultaneous-claim concurrency testing is not applicable to the live v1.0.0 auth adapter, which has no persistent source-claim table or transactional claim operation.
 - Static rules C–E are heuristics, not proof of exploitation. Rule C detects mixed-script Unicode only; it does not claim to detect phonetic poisoning.
 - Rule B uses metadata and file size only. It never decodes audio.
-- The first CI run on this branch is the first automated execution of these changes; no passing result is claimed in advance.
+- The first CI run was recorded on this review branch; see the pull request checks for the exact tested commit.
