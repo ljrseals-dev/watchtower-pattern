@@ -22,5 +22,7 @@ jobs:
         run: python tests/test_smoke.py
       - name: AI music / DAW MCP tests
         run: python tests/test_ai_music_mcp.py
+      - name: CLAP / WAV scanner tests
+        run: python tests/test_clap_audio.py
       - name: CLI help
         run: python harness.py --help
