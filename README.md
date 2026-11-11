@@ -151,12 +151,15 @@ watchtower/
 │   ├── 03-cross-cutting-stack.md
 │   ├── 04-operating-the-harness.md
 │   ├── 05-honest-gaps.md
-│   └── 06-ai-music-daw-mcp.md
+│   ├── 06-ai-music-daw-mcp.md
+│   └── 07-clap-wav-audio.md
 ├── adapters/               # Placeholder for future extracted adapters
 ├── examples/
 │   └── sample_auth.log
 ├── tests/
-│   └── test_smoke.py
+│   ├── test_smoke.py
+│   ├── test_ai_music_mcp.py
+│   └── test_clap_audio.py
 └── .github/workflows/
     └── ci.yml
 ```
