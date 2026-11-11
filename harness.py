@@ -604,7 +604,7 @@ def cmd_scan(args: argparse.Namespace, store: Store) -> int:
         aa = AuthLogAdapter()
         all_signals.extend(aa.scan_lines(lines, source=args.auth_log))
 
-    # Read-only AI music / DAW MCP log and static source inspection.
+    # Read-only AI music / DAW MCP, CLAP inventory, and WAV/audio-call checks.
     mcp_findings: List[Dict[str, Any]] = []
     if args.mcp_log or args.music_scan_dir:
         from ai_music_mcp_scanner import load_profile, scan_mcp_log, scan_static_tree
@@ -614,7 +614,17 @@ def cmd_scan(args: argparse.Namespace, store: Store) -> int:
             mcp_findings.extend(scan_mcp_log(mcp_text, profile))
         if args.music_scan_dir:
             mcp_findings.extend(scan_static_tree(Path(args.music_scan_dir)))
-    for item in mcp_findings:
+    clap_audio_findings: List[Dict[str, Any]] = []
+    if args.clap_scan_dir or args.audio_scan_dir or args.audio_call_log:
+        from clap_audio_scanner import scan_clap_tree, scan_audio_tree, scan_audio_call_log
+        if args.clap_scan_dir:
+            clap_audio_findings.extend(scan_clap_tree(Path(args.clap_scan_dir)))
+        if args.audio_scan_dir:
+            clap_audio_findings.extend(scan_audio_tree(Path(args.audio_scan_dir)))
+        if args.audio_call_log:
+            call_text = Path(args.audio_call_log).read_text(errors="replace") if args.audio_call_log != "-" else sys.stdin.read()
+            clap_audio_findings.extend(scan_audio_call_log(call_text))
+    for item in mcp_findings + clap_audio_findings:
         signal = Signal(
             kind="ai_music_mcp_" + str(item["rule_id"]).lower(),
             path_or_source=str(item.get("tool") or "static-scan"),
@@ -625,18 +635,18 @@ def cmd_scan(args: argparse.Namespace, store: Store) -> int:
         finding = Finding(
             id=None, score=float(item["score"]), tier=str(item["tier"]),
             guidance=str(item["suggested_action"]), signals=[signal],
-            created_at=datetime.now(timezone.utc).isoformat(), surface="ai_music_mcp",
+            created_at=datetime.now(timezone.utc).isoformat(), surface=str(item.get("surface") or "ai_music_mcp"),
             tool=str(item.get("tool") or "static-scan"), rule_id=str(item["rule_id"]),
             mcp_session_id=item.get("session_id"),
         )
         fid=store.insert_finding(finding)
-        store.audit.append("ai_music_mcp_finding",{"finding_id":fid,"surface":"ai_music_mcp",
+        store.audit.append("specialized_finding",{"finding_id":fid,"surface":finding.surface,
             "tool":finding.tool,"rule_id":finding.rule_id,"score":finding.score,"session_id":finding.mcp_session_id})
-        print(f"Finding #{fid}  score={finding.score:.2f}  tier={finding.tier}  surface=ai_music_mcp  rule={finding.rule_id}")
+        print(f"Finding #{fid}  score={finding.score:.2f}  tier={finding.tier}  surface={finding.surface}  rule={finding.rule_id}")
         print(f"  {finding.guidance}")
 
     if not all_signals:
-        if not mcp_findings:
+        if not mcp_findings and not clap_audio_findings:
             print("No signals.")
             store.audit.append("scan", {"signals": 0, "findings": 0})
         return 0
@@ -738,9 +748,9 @@ def cmd_report(args: argparse.Namespace, store: Store) -> int:
             print("  ⚠  Dismissed rate > 30% — thresholds or adapters may need tuning.")
     mcp_rows = store.conn.execute(
         """SELECT surface, tool, rule_id, score, status, guidance, signals
-           FROM findings WHERE surface='ai_music_mcp' ORDER BY id"""
+           FROM findings WHERE surface IN ('ai_music_mcp','clap_audio') ORDER BY id"""
     ).fetchall()
-    print("AI Music / DAW MCP")
+    print("AI Music / DAW MCP / CLAP / WAV")
     print("  surface | tool | rule_id | score | explanation | queued_for_review")
     for row in mcp_rows:
         stored_signals = json.loads(row["signals"])
@@ -806,6 +816,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--mcp-log", help="JSON-RPC MCP tool-call log (or - for stdin)")
     s.add_argument("--music-scan-dir", help="Read-only static scan of a skill / DAW harness directory")
     s.add_argument("--daw-profile", help="Optional daw_profile.json")
+    s.add_argument("--clap-scan-dir", help="Read-only inventory and integrity scan of a CLAP plugin directory")
+    s.add_argument("--audio-scan-dir", help="Read-only WAV header checks under a directory or on one file")
+    s.add_argument("--audio-call-log", help="Timestamped JSONL audio/WAV call log (or - for stdin)")
     s.add_argument("--baseline", help="Baseline JSON path")
 
     # review
