@@ -34,3 +34,7 @@ python harness.py --help
 - Keep the scanner stdlib-only and advisory-only.
 - Preserve source event identifiers and session IDs when present; never fabricate them.
 - MCP review records require a reviewer-entered session ID and rationale.
+
+- CLAP and WAV scanners must remain read-only: never load a plugin, decode audio, or execute a binary to obtain metadata.
+- Keep WAV parsing bounded to headers/chunk metadata; treat malformed fields and call bursts as indicators, not proof of a crash.
+- Do not claim a plugin is malicious based only on a hash, filename, embedded string, or bundle size.
