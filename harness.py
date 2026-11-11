@@ -42,7 +42,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 # Constants & configuration
 # ---------------------------------------------------------------------------
 
-VERSION = "1.0.0"
+VERSION = "1.0.3"
 DEFAULT_DB = Path.home() / ".watchtower" / "harness.db"
 DEFAULT_BASELINE = Path.home() / ".watchtower" / "baseline.json"
 CONFIG_PATH = Path.home() / ".watchtower" / "config.json"
@@ -96,6 +96,11 @@ class Finding:
     reviewed_at: Optional[str] = None
     reviewer: Optional[str] = None
     rationale: Optional[str] = None
+    surface: str = "general"
+    tool: Optional[str] = None
+    rule_id: Optional[str] = None
+    mcp_session_id: Optional[str] = None
+    review_session_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -193,20 +198,36 @@ class Store:
                 created_at TEXT NOT NULL,
                 reviewed_at TEXT,
                 reviewer TEXT,
-                rationale TEXT
+                rationale TEXT,
+                surface TEXT NOT NULL DEFAULT 'general',
+                tool TEXT,
+                rule_id TEXT,
+                mcp_session_id TEXT,
+                review_session_id TEXT
             )
         """)
+        existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(findings)")}
+        migrations = {
+            "surface": "ALTER TABLE findings ADD COLUMN surface TEXT NOT NULL DEFAULT 'general'",
+            "tool": "ALTER TABLE findings ADD COLUMN tool TEXT",
+            "rule_id": "ALTER TABLE findings ADD COLUMN rule_id TEXT",
+            "mcp_session_id": "ALTER TABLE findings ADD COLUMN mcp_session_id TEXT",
+            "review_session_id": "ALTER TABLE findings ADD COLUMN review_session_id TEXT",
+        }
+        for column, statement in migrations.items():
+            if column not in existing: self.conn.execute(statement)
         self.conn.commit()
 
     def insert_finding(self, f: Finding) -> int:
         cur = self.conn.execute(
             """INSERT INTO findings
-               (score, tier, guidance, signals, status, created_at, reviewed_at, reviewer, rationale)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (score, tier, guidance, signals, status, created_at, reviewed_at, reviewer, rationale,
+                surface, tool, rule_id, mcp_session_id, review_session_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                f.score, f.tier, f.guidance,
-                json.dumps([asdict(s) for s in f.signals]),
+                f.score, f.tier, f.guidance, json.dumps([asdict(s) for s in f.signals]),
                 f.status, f.created_at, f.reviewed_at, f.reviewer, f.rationale,
+                f.surface, f.tool, f.rule_id, f.mcp_session_id, f.review_session_id,
             ),
         )
         self.conn.commit()
@@ -223,13 +244,14 @@ class Store:
         row = self.conn.execute("SELECT * FROM findings WHERE id = ?", (fid,)).fetchone()
         return self._row_to_finding(row) if row else None
 
-    def update_review(self, fid: int, status: str, reviewer: str, rationale: str) -> None:
+    def update_review(self, fid: int, status: str, reviewer: str, rationale: str,
+                      review_session_id: Optional[str] = None) -> None:
         now = datetime.now(timezone.utc).isoformat()
         self.conn.execute(
             """UPDATE findings
-               SET status = ?, reviewed_at = ?, reviewer = ?, rationale = ?
+               SET status = ?, reviewed_at = ?, reviewer = ?, rationale = ?, review_session_id = ?
                WHERE id = ?""",
-            (status, now, reviewer, rationale, fid),
+            (status, now, reviewer, rationale, review_session_id, fid),
         )
         self.conn.commit()
 
@@ -263,6 +285,11 @@ class Store:
             reviewed_at=row["reviewed_at"],
             reviewer=row["reviewer"],
             rationale=row["rationale"],
+            surface=row["surface"] if "surface" in row.keys() else "general",
+            tool=row["tool"] if "tool" in row.keys() else None,
+            rule_id=row["rule_id"] if "rule_id" in row.keys() else None,
+            mcp_session_id=row["mcp_session_id"] if "mcp_session_id" in row.keys() else None,
+            review_session_id=row["review_session_id"] if "review_session_id" in row.keys() else None,
         )
 
 # ---------------------------------------------------------------------------
@@ -560,7 +587,7 @@ def cmd_scan(args: argparse.Namespace, store: Store) -> int:
     all_signals: List[Signal] = []
 
     # File integrity
-    if args.paths or not (args.input or args.auth_log):
+    if args.paths or not (args.input or args.auth_log or args.mcp_log or args.music_scan_dir or args.clap_scan_dir or args.audio_scan_dir or args.audio_call_log):
         roots = [Path(p) for p in (args.paths or ["."])]
         fi = FileIntegrityAdapter(Path(args.baseline) if args.baseline else DEFAULT_BASELINE)
         all_signals.extend(fi.scan(roots))
@@ -577,9 +604,51 @@ def cmd_scan(args: argparse.Namespace, store: Store) -> int:
         aa = AuthLogAdapter()
         all_signals.extend(aa.scan_lines(lines, source=args.auth_log))
 
+    # Read-only AI music / DAW MCP, CLAP inventory, and WAV/audio-call checks.
+    mcp_findings: List[Dict[str, Any]] = []
+    if args.mcp_log or args.music_scan_dir:
+        from ai_music_mcp_scanner import load_profile, scan_mcp_log, scan_static_tree
+        profile = load_profile(args.daw_profile)
+        if args.mcp_log:
+            mcp_text = Path(args.mcp_log).read_text(errors="replace") if args.mcp_log != "-" else sys.stdin.read()
+            mcp_findings.extend(scan_mcp_log(mcp_text, profile))
+        if args.music_scan_dir:
+            mcp_findings.extend(scan_static_tree(Path(args.music_scan_dir)))
+    clap_audio_findings: List[Dict[str, Any]] = []
+    if args.clap_scan_dir or args.audio_scan_dir or args.audio_call_log:
+        from clap_audio_scanner import scan_clap_tree, scan_audio_tree, scan_audio_call_log
+        if args.clap_scan_dir:
+            clap_audio_findings.extend(scan_clap_tree(Path(args.clap_scan_dir)))
+        if args.audio_scan_dir:
+            clap_audio_findings.extend(scan_audio_tree(Path(args.audio_scan_dir)))
+        if args.audio_call_log:
+            call_text = Path(args.audio_call_log).read_text(errors="replace") if args.audio_call_log != "-" else sys.stdin.read()
+            clap_audio_findings.extend(scan_audio_call_log(call_text))
+    for item in mcp_findings + clap_audio_findings:
+        signal = Signal(
+            kind="ai_music_mcp_" + str(item["rule_id"]).lower(),
+            path_or_source=str(item.get("tool") or "static-scan"),
+            detail=str(item["explanation"]), weight=float(item["score"]),
+            raw={"rule_id":item["rule_id"],"evidence":item.get("evidence",{}),
+                 "suggested_action":item.get("suggested_action",""),"session_id":item.get("session_id")},
+        )
+        finding = Finding(
+            id=None, score=float(item["score"]), tier=str(item["tier"]),
+            guidance=str(item["suggested_action"]), signals=[signal],
+            created_at=datetime.now(timezone.utc).isoformat(), surface=str(item.get("surface") or "ai_music_mcp"),
+            tool=str(item.get("tool") or "static-scan"), rule_id=str(item["rule_id"]),
+            mcp_session_id=item.get("session_id"),
+        )
+        fid=store.insert_finding(finding)
+        store.audit.append("specialized_finding",{"finding_id":fid,"surface":finding.surface,
+            "tool":finding.tool,"rule_id":finding.rule_id,"score":finding.score,"session_id":finding.mcp_session_id})
+        print(f"Finding #{fid}  score={finding.score:.2f}  tier={finding.tier}  surface={finding.surface}  rule={finding.rule_id}")
+        print(f"  {finding.guidance}")
+
     if not all_signals:
-        print("No signals.")
-        store.audit.append("scan", {"signals": 0, "findings": 0})
+        if not mcp_findings and not clap_audio_findings:
+            print("No signals.")
+            store.audit.append("scan", {"signals": 0, "findings": 0})
         return 0
 
     # Group into a single finding for simplicity; real deployments may split by source
@@ -645,14 +714,16 @@ def cmd_review(args: argparse.Namespace, store: Store) -> int:
         rationale = input("Rationale (required): ").strip()
         while not rationale:
             rationale = input("Rationale (required): ").strip()
+        review_session_id = None
+        if f.surface == "ai_music_mcp":
+            captured = f.mcp_session_id or "not recorded in source event"
+            review_session_id = input(f"MCP session ID (captured: {captured}; enter to confirm/re-enter): ").strip()
+            while not review_session_id:
+                review_session_id = input("MCP session ID (required): ").strip()
 
-        store.update_review(f.id, status, reviewer, rationale)
-        store.audit.append("review", {
-            "finding_id": f.id,
-            "status": status,
-            "reviewer": reviewer,
-            "rationale": rationale,
-        })
+        store.update_review(f.id, status, reviewer, rationale, review_session_id)
+        store.audit.append("review", {"finding_id":f.id,"status":status,"reviewer":reviewer,
+            "rationale":rationale,"mcp_session_id":review_session_id})
         print(f"Recorded: {status} by {reviewer}")
     return 0
 
@@ -675,6 +746,19 @@ def cmd_report(args: argparse.Namespace, store: Store) -> int:
         print(f"  Dismissed rate : {fp_rate:.1f}%  (of closed)")
         if fp_rate > 30:
             print("  ⚠  Dismissed rate > 30% — thresholds or adapters may need tuning.")
+    mcp_rows = store.conn.execute(
+        """SELECT surface, tool, rule_id, score, status, guidance, signals
+           FROM findings WHERE surface IN ('ai_music_mcp','clap_audio') ORDER BY id"""
+    ).fetchall()
+    print("AI Music / DAW MCP / CLAP / WAV")
+    print("  surface | tool | rule_id | score | explanation | queued_for_review")
+    for row in mcp_rows:
+        stored_signals = json.loads(row["signals"])
+        explanation = stored_signals[0].get("detail", "") if stored_signals else ""
+        print(f"  {row['surface']} | {row['tool'] or ''} | {row['rule_id'] or ''} | "
+              f"{row['score']:.2f} | {explanation} | {'true' if row['status']=='open' else 'false'}")
+        print(f"    Suggested action: {row['guidance']}")
+    if not mcp_rows: print("  No AI music / DAW MCP findings.")
     print()
     print("Response tiers (advisory only):")
     for thresh, tier, guidance in RESPONSE_TIERS:
@@ -729,6 +813,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("paths", nargs="*", help="Paths for FileIntegrityAdapter")
     s.add_argument("--input", help="File (or - for stdin) for InputAnomalyAdapter")
     s.add_argument("--auth-log", help="Auth log file for AuthLogAdapter")
+    s.add_argument("--mcp-log", help="JSON-RPC MCP tool-call log (or - for stdin)")
+    s.add_argument("--music-scan-dir", help="Read-only static scan of a skill / DAW harness directory")
+    s.add_argument("--daw-profile", help="Optional daw_profile.json")
+    s.add_argument("--clap-scan-dir", help="Read-only inventory and integrity scan of a CLAP plugin directory")
+    s.add_argument("--audio-scan-dir", help="Read-only WAV header checks under a directory or on one file")
+    s.add_argument("--audio-call-log", help="Timestamped JSONL audio/WAV call log (or - for stdin)")
     s.add_argument("--baseline", help="Baseline JSON path")
 
     # review

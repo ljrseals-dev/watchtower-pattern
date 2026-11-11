@@ -38,6 +38,15 @@ python harness.py scan /path/to/app
 python harness.py scan --input suspicious_prompt.txt
 python harness.py scan --auth-log /var/log/auth.log
 
+# AI music / DAW MCP request logs and static skill checks (read-only)
+python harness.py scan --mcp-log mcp-events.jsonl --daw-profile daw_profile.json
+python harness.py scan --music-scan-dir ./skills --daw-profile daw_profile.json
+
+# CLAP plugin inventory + WAV header / repeated audio-call checks (read-only)
+python harness.py scan --clap-scan-dir /path/to/clap/plugins
+python harness.py scan --audio-scan-dir /path/to/audio-or-wav-folder
+python harness.py scan --audio-call-log audio-calls.jsonl
+
 # 3. Review open findings (forces reviewer name + rationale)
 python harness.py review
 
@@ -64,6 +73,98 @@ Data lives under `~/.watchtower/` by default (`harness.db`, `baseline.json`).
 
 ---
 
+## Threat model and detection signals
+
+Watchtower's threat model maps adversary behavior to observable signals and reviewable findings. The following examples describe the intended detection vocabulary; a signal is evidence for review, not a verdict that an incident occurred.
+
+| Adversary move / risk | Example signal or surface |
+|-----------------------|---------------------------|
+| Prompt injection or instruction override | `input_injection_pattern` |
+| Encoded payload smuggling through URL parameters, environment variables, or argv | `input_encoded_payload` |
+| Bidirectional or control-character spoofing | `input_control_characters` |
+| Unexpected or modified executable/file | `file_added`, `file_modified` |
+| Permission escalation on disk | `file_permission_change` |
+| New or unexpected authentication source | `auth_new_source` |
+| MCP tool-call path traversal / output-path escape | `ai_music_mcp` findings |
+| Audio resource exhaustion or suspicious caption text | `ai_music_mcp` findings |
+| CLAP bundle integrity, symlink, or unusual-footprint indicators | `clap_audio` findings |
+| Malformed/extreme WAV headers or repeated audio-call bursts | `clap_audio` findings |
+
+The browser-agent, desktop-harness, and cross-cutting remediation documents remain the project-wide control catalog. The AI music/DAW and CLAP/WAV checks are additional read-only detection surfaces feeding the same human review workflow; they do not replace the core adapters or remediation guidance.
+
+---
+
+## AI music, DAW, CLAP, and audio surfaces
+
+The optional music/audio checks extend the existing detection-and-review model to DAW-adjacent agent tooling:
+
+- **MCP logs and static skill files:** inspect supplied JSON-RPC tool-call logs and static source for path-boundary, audio-resource, mixed-script caption, package-pinning, and control-endpoint indicators.
+- **CLAP bundles:** inventory `.clap` directories, record bounded SHA-256 hashes for conventional plugin binaries, collect limited printable metadata strings, and flag symlinks or unusual layouts/footprints.
+- **WAV files:** inspect bounded RIFF/RF64 header and chunk metadata for malformed bounds or extreme parameters. Audio samples are not decoded.
+- **Audio-call logs:** identify bursts of timestamped WAV/audio/render/import/decode operations grouped by session and tool.
+
+Example commands:
+
+```bash
+python harness.py scan --mcp-log mcp-events.jsonl --daw-profile daw_profile.json
+python harness.py scan --music-scan-dir ./skills --daw-profile daw_profile.json
+python harness.py scan --clap-scan-dir /path/to/clap/plugins
+python harness.py scan --audio-scan-dir /path/to/audio-or-wav-folder
+python harness.py scan --audio-call-log audio-calls.jsonl
+```
+
+These are **indicators, not exploit confirmation**. A log record does not prove a tool call was accepted or executed; a burst does not prove a DAW crashed; a hash does not establish whether a plugin is trusted or malicious. The current audio checks do not monitor live audio callbacks, CPU load, xruns, memory pressure, or actual plugin crashes. CLAP metadata is not authoritatively identified by loading plugin entry points, and WAV inspection is not a complete RIFF/RF64 validator.
+
+All specialized findings are advisory and enter the existing review/report path. The scanners do not load plugins, execute binaries, decode PCM, render audio, make network calls, install packages, control DAW processes, block, delete, quarantine, or disable plugins.
+
+---
+
+
+---
+
+## Real-time audio telemetry boundary (design contract)
+
+The Watchtower model can be extended to observe real-time audio-engine health without turning the audio callback into a monitoring workload. This section documents the intended **Watchtower Pattern** for a future native telemetry adapter; it does not claim that live callback telemetry is implemented by the current Python scanners.
+
+### Audio-thread contract
+
+The real-time producer publishes compact, fixed-size telemetry frames to a preallocated, bounded single-producer/single-consumer (SPSC) ring buffer.
+
+The audio callback must:
+
+- Never wait for the telemetry consumer.
+- Never allocate or free memory.
+- Never acquire a mutex, condition variable, or blocking lock.
+- Never perform file, console, or network I/O.
+- Never run logging, UI work, or unbounded analysis.
+- Never let telemetry back-pressure alter DSP execution or audio output.
+
+If the ring buffer is full, the producer follows a documented, bounded drop policy and increments a lock-free drop counter where the target platform supports the required atomic operation. Telemetry loss must be observable; the audio thread must not stall to preserve a sample.
+
+### Telemetry frame and analysis
+
+Frames should contain only bounded scalar measurements and a sequence/timestamp suitable for correlating observations, such as:
+
+- Callback duration and configured buffer duration.
+- Measured DSP/CPU load and peak callback time.
+- Buffer underruns/overruns and missed-deadline counts.
+- Reported latency and relevant engine state.
+- A monotonically increasing sequence number or equivalent loss indicator.
+
+The non-real-time consumer drains frames and computes rolling averages plus observed minima and maxima over explicitly defined windows. It may aggregate, format, persist, and display results; those operations stay off the audio thread. Reports must identify the measurement window, sample count, and dropped-frame count so that missing observations are not mistaken for healthy performance.
+
+### Concurrency and safety requirements
+
+Use a true SPSC ownership model: exactly one callback-side producer and one consumer. Publish payload before publishing the write index; the consumer must observe the published index before reading the corresponding payload. Use acquire/release ordering for index hand-off unless a separately reviewed implementation proves a weaker ordering correct. Relaxed ordering is appropriate only for independent counters whose semantics do not publish or protect frame payloads.
+
+The implementation must verify that every atomic used on the callback path is lock-free on each supported target. If that cannot be guaranteed, omit that metric or use a safe prevalidated alternative; do not silently introduce a library lock. Ring capacity, overflow behavior, counter wraparound, and shutdown/quiescence must be specified and tested. The consumer must never read a slot while the producer is modifying it.
+
+### Scope and implementation status
+
+This is an architectural contract for a future live telemetry adapter, not a feature claim about the current repository. The existing `clap_audio_scanner.py` performs bounded, read-only inventory and file/log inspection; it does not attach to a DAW, instrument a live callback, measure live CPU load, or detect actual xruns or plugin crashes. Any implementation should land with dedicated concurrency tests, target lock-free checks, overflow tests, and audio-thread safety review before README status is changed from design contract to implemented capability.
+
+---
+
 ## Response tiers (advisory only)
 
 | Score | Tier | Guidance |
@@ -82,6 +183,8 @@ The harness prints these. It does **not** execute them.
 ```
 watchtower/
 ├── harness.py              # The detection core (CLI)
+├── ai_music_mcp_scanner.py # Read-only MCP / AI music / DAW indicators
+├── clap_audio_scanner.py   # Read-only CLAP inventory + WAV/audio-call indicators
 ├── README.md               # This file
 ├── LICENSE                 # MIT
 ├── requirements.txt        # Empty / optional (stdlib only for core)
@@ -91,12 +194,16 @@ watchtower/
 │   ├── 02-desktop-harness-remediations.md
 │   ├── 03-cross-cutting-stack.md
 │   ├── 04-operating-the-harness.md
-│   └── 05-honest-gaps.md
+│   ├── 05-honest-gaps.md
+│   ├── 06-ai-music-daw-mcp.md
+│   └── 07-clap-wav-audio.md
 ├── adapters/               # Placeholder for future extracted adapters
 ├── examples/
 │   └── sample_auth.log
 ├── tests/
-│   └── test_smoke.py
+│   ├── test_smoke.py
+│   ├── test_ai_music_mcp.py
+│   └── test_clap_audio.py
 └── .github/workflows/
     └── ci.yml
 ```
@@ -135,3 +242,8 @@ MIT. See [LICENSE](LICENSE).
 ## Companion documents
 
 If you need the operating-procedure companion (reviewer roles, on-call rotation, escalation paths, retention policy, incident-response runbook that plugs into `cmd_review`), open an issue or ask — it can be added under `docs/ops/`.
+
+
+## Research paper
+
+The accompanying research manuscript, **“The Trust Boundary You Forgot You Had: Threats Posed by AI-Coded Plugins and DAW Workstations, and a Human-in-the-Loop Architecture for Stopping Them,”** is available in [`docs/the-trust-boundary-ai-coded-plugins-daw-workstations.md`](docs/the-trust-boundary-ai-coded-plugins-daw-workstations.md). Its incident claims and references are author-supplied and require independent source verification before external publication.
