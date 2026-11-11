@@ -24,3 +24,13 @@ python harness.py --help
 - Update docs if you change behavior or add a signal kind.
 - Add or extend a smoke test when practical.
 - Never commit secrets, real baselines containing sensitive paths, or production databases.
+
+
+## AI music / DAW MCP scanner
+
+- Treat JSON-RPC logs and scanned source as untrusted input; never execute them.
+- Do not decode audio during scanning. Use only file size and supplied metadata.
+- Label static-analysis results as indicators, not proof of exploitability.
+- Keep the scanner stdlib-only and advisory-only.
+- Preserve source event identifiers and session IDs when present; never fabricate them.
+- MCP review records require a reviewer-entered session ID and rationale.

@@ -38,6 +38,10 @@ python harness.py scan /path/to/app
 python harness.py scan --input suspicious_prompt.txt
 python harness.py scan --auth-log /var/log/auth.log
 
+# AI music / DAW MCP request logs and static skill checks (read-only)
+python harness.py scan --mcp-log mcp-events.jsonl --daw-profile daw_profile.json
+python harness.py scan --music-scan-dir ./skills --daw-profile daw_profile.json
+
 # 3. Review open findings (forces reviewer name + rationale)
 python harness.py review
 
@@ -82,6 +86,7 @@ The harness prints these. It does **not** execute them.
 ```
 watchtower/
 ├── harness.py              # The detection core (CLI)
+├── ai_music_mcp_scanner.py # Read-only MCP / AI music / DAW indicators
 ├── README.md               # This file
 ├── LICENSE                 # MIT
 ├── requirements.txt        # Empty / optional (stdlib only for core)
@@ -91,7 +96,8 @@ watchtower/
 │   ├── 02-desktop-harness-remediations.md
 │   ├── 03-cross-cutting-stack.md
 │   ├── 04-operating-the-harness.md
-│   └── 05-honest-gaps.md
+│   ├── 05-honest-gaps.md
+│   └── 06-ai-music-daw-mcp.md
 ├── adapters/               # Placeholder for future extracted adapters
 ├── examples/
 │   └── sample_auth.log
