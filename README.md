@@ -42,6 +42,11 @@ python harness.py scan --auth-log /var/log/auth.log
 python harness.py scan --mcp-log mcp-events.jsonl --daw-profile daw_profile.json
 python harness.py scan --music-scan-dir ./skills --daw-profile daw_profile.json
 
+# CLAP plugin inventory + WAV header / repeated audio-call checks (read-only)
+python harness.py scan --clap-scan-dir /path/to/clap/plugins
+python harness.py scan --audio-scan-dir /path/to/audio-or-wav-folder
+python harness.py scan --audio-call-log audio-calls.jsonl
+
 # 3. Review open findings (forces reviewer name + rationale)
 python harness.py review
 
@@ -87,6 +92,7 @@ The harness prints these. It does **not** execute them.
 watchtower/
 ├── harness.py              # The detection core (CLI)
 ├── ai_music_mcp_scanner.py # Read-only MCP / AI music / DAW indicators
+├── clap_audio_scanner.py   # Read-only CLAP inventory + WAV/audio-call indicators
 ├── README.md               # This file
 ├── LICENSE                 # MIT
 ├── requirements.txt        # Empty / optional (stdlib only for core)
