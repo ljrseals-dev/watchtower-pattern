@@ -119,6 +119,50 @@ All specialized findings are advisory and enter the existing review/report path.
 
 ---
 
+
+---
+
+## Real-time audio telemetry boundary (design contract)
+
+The Watchtower model can be extended to observe real-time audio-engine health without turning the audio callback into a monitoring workload. This section documents the intended **Watchtower Pattern** for a future native telemetry adapter; it does not claim that live callback telemetry is implemented by the current Python scanners.
+
+### Audio-thread contract
+
+The real-time producer publishes compact, fixed-size telemetry frames to a preallocated, bounded single-producer/single-consumer (SPSC) ring buffer.
+
+The audio callback must:
+
+- Never wait for the telemetry consumer.
+- Never allocate or free memory.
+- Never acquire a mutex, condition variable, or blocking lock.
+- Never perform file, console, or network I/O.
+- Never run logging, UI work, or unbounded analysis.
+- Never let telemetry back-pressure alter DSP execution or audio output.
+
+If the ring buffer is full, the producer follows a documented, bounded drop policy and increments a lock-free drop counter where the target platform supports the required atomic operation. Telemetry loss must be observable; the audio thread must not stall to preserve a sample.
+
+### Telemetry frame and analysis
+
+Frames should contain only bounded scalar measurements and a sequence/timestamp suitable for correlating observations, such as:
+
+- Callback duration and configured buffer duration.
+- Measured DSP/CPU load and peak callback time.
+- Buffer underruns/overruns and missed-deadline counts.
+- Reported latency and relevant engine state.
+- A monotonically increasing sequence number or equivalent loss indicator.
+
+The non-real-time consumer drains frames and computes rolling averages plus observed minima and maxima over explicitly defined windows. It may aggregate, format, persist, and display results; those operations stay off the audio thread. Reports must identify the measurement window, sample count, and dropped-frame count so that missing observations are not mistaken for healthy performance.
+
+### Concurrency and safety requirements
+
+Use a true SPSC ownership model: exactly one callback-side producer and one consumer. Publish payload before publishing the write index; the consumer must observe the published index before reading the corresponding payload. Use acquire/release ordering for index hand-off unless a separately reviewed implementation proves a weaker ordering correct. Relaxed ordering is appropriate only for independent counters whose semantics do not publish or protect frame payloads.
+
+The implementation must verify that every atomic used on the callback path is lock-free on each supported target. If that cannot be guaranteed, omit that metric or use a safe prevalidated alternative; do not silently introduce a library lock. Ring capacity, overflow behavior, counter wraparound, and shutdown/quiescence must be specified and tested. The consumer must never read a slot while the producer is modifying it.
+
+### Scope and implementation status
+
+This is an architectural contract for a future live telemetry adapter, not a feature claim about the current repository. The existing `clap_audio_scanner.py` performs bounded, read-only inventory and file/log inspection; it does not attach to a DAW, instrument a live callback, measure live CPU load, or detect actual xruns or plugin crashes. Any implementation should land with dedicated concurrency tests, target lock-free checks, overflow tests, and audio-thread safety review before README status is changed from design contract to implemented capability.
+
 ---
 
 ## Response tiers (advisory only)
