@@ -73,6 +73,54 @@ Data lives under `~/.watchtower/` by default (`harness.db`, `baseline.json`).
 
 ---
 
+## Threat model and detection signals
+
+Watchtower's threat model maps adversary behavior to observable signals and reviewable findings. The following examples describe the intended detection vocabulary; a signal is evidence for review, not a verdict that an incident occurred.
+
+| Adversary move / risk | Example signal or surface |
+|-----------------------|---------------------------|
+| Prompt injection or instruction override | `input_injection_pattern` |
+| Encoded payload smuggling through URL parameters, environment variables, or argv | `input_encoded_payload` |
+| Bidirectional or control-character spoofing | `input_control_characters` |
+| Unexpected or modified executable/file | `file_added`, `file_modified` |
+| Permission escalation on disk | `file_permission_change` |
+| New or unexpected authentication source | `auth_new_source` |
+| MCP tool-call path traversal / output-path escape | `ai_music_mcp` findings |
+| Audio resource exhaustion or suspicious caption text | `ai_music_mcp` findings |
+| CLAP bundle integrity, symlink, or unusual-footprint indicators | `clap_audio` findings |
+| Malformed/extreme WAV headers or repeated audio-call bursts | `clap_audio` findings |
+
+The browser-agent, desktop-harness, and cross-cutting remediation documents remain the project-wide control catalog. The AI music/DAW and CLAP/WAV checks are additional read-only detection surfaces feeding the same human review workflow; they do not replace the core adapters or remediation guidance.
+
+---
+
+## AI music, DAW, CLAP, and audio surfaces
+
+The optional music/audio checks extend the existing detection-and-review model to DAW-adjacent agent tooling:
+
+- **MCP logs and static skill files:** inspect supplied JSON-RPC tool-call logs and static source for path-boundary, audio-resource, mixed-script caption, package-pinning, and control-endpoint indicators.
+- **CLAP bundles:** inventory `.clap` directories, record bounded SHA-256 hashes for conventional plugin binaries, collect limited printable metadata strings, and flag symlinks or unusual layouts/footprints.
+- **WAV files:** inspect bounded RIFF/RF64 header and chunk metadata for malformed bounds or extreme parameters. Audio samples are not decoded.
+- **Audio-call logs:** identify bursts of timestamped WAV/audio/render/import/decode operations grouped by session and tool.
+
+Example commands:
+
+```bash
+python harness.py scan --mcp-log mcp-events.jsonl --daw-profile daw_profile.json
+python harness.py scan --music-scan-dir ./skills --daw-profile daw_profile.json
+python harness.py scan --clap-scan-dir /path/to/clap/plugins
+python harness.py scan --audio-scan-dir /path/to/audio-or-wav-folder
+python harness.py scan --audio-call-log audio-calls.jsonl
+```
+
+These are **indicators, not exploit confirmation**. A log record does not prove a tool call was accepted or executed; a burst does not prove a DAW crashed; a hash does not establish whether a plugin is trusted or malicious. The current audio checks do not monitor live audio callbacks, CPU load, xruns, memory pressure, or actual plugin crashes. CLAP metadata is not authoritatively identified by loading plugin entry points, and WAV inspection is not a complete RIFF/RF64 validator.
+
+All specialized findings are advisory and enter the existing review/report path. The scanners do not load plugins, execute binaries, decode PCM, render audio, make network calls, install packages, control DAW processes, block, delete, quarantine, or disable plugins.
+
+---
+
+---
+
 ## Response tiers (advisory only)
 
 | Score | Tier | Guidance |
