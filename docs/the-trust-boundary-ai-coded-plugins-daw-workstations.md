@@ -298,7 +298,7 @@ The architecture assumes that the human reviewer is competent, available, and no
 
 ### 8.5 The Watchtower Repository Is a Starting Point, Not a Product
 
-The Watchtower Pattern repository is a well-designed detection core, but it is not a finished commercial product. It does not include the AI Music MCP scanner described in this paper, and the adapters directory is a placeholder for future extracted adapters. Studios that adopt the pattern will need to implement, test, and maintain the domain-specific rules. The value of the pattern is the architecture and the design constraints, not the completeness of the current rule set.
+The Watchtower Pattern repository is a detection core, not a finished commercial product. The review branch accompanying this manuscript includes an initial read-only AI music / DAW MCP scanner, plus separate CLAP inventory and WAV/audio-call indicators. Those implementations cover only a subset of the rules specified in this paper: in particular, the paper's proposed metadata-based decompression estimates, richer caption-integrity analysis, package-registry baseline enforcement, and authenticated-route analysis should not be assumed to be fully implemented merely because related indicators exist. Studios that adopt the pattern will need to validate, test, and maintain the domain-specific rules for their own environments. The value of the pattern is the architecture and the design constraints, not a claim of complete detection coverage.
 
 ---
 
