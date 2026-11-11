@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Read-only stdlib indicators for AI music / DAW MCP surfaces."""
 from __future__ import annotations
-import json, ntpath, os, re, sys, unicodedata
+import json, ntpath, os, re, shlex, sys, unicodedata
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -171,12 +171,35 @@ def _pip_install_is_unpinned(line: str) -> bool:
     if not clean or clean.startswith("#"): return False
     if not re.search(r"(?:\bpip(?:3)?\s+install\b|\bpython(?:\d+(?:\.\d+)?)?\s+-m\s+pip\s+install\b)",clean): return False
     if "--require-hashes" in clean: return False
-    package_tokens=[token for token in clean.split() if not token.startswith("-")]
-    if not package_tokens:
+    try:
+        tokens=shlex.split(clean)
+    except ValueError:
         return True
-    # Every explicit package spec must be pinned; one pinned dependency must
-    # not mask another unpinned dependency on the same command line.
-    return any(not PIN_RE.search(token) for token in package_tokens if token not in {"pip", "install"})
+    try:
+        install_index=tokens.index("install")
+    except ValueError:
+        return True
+    args=tokens[install_index+1:]
+    if any(token in {"-r", "--requirement", "-c", "--constraint"} for token in args):
+        return True
+    value_options={"--index-url","--extra-index-url","--find-links","-f","--trusted-host"}
+    packages=[]
+    skip_next=False
+    for token in args:
+        if skip_next:
+            skip_next=False
+            continue
+        if token in value_options:
+            skip_next=True
+            continue
+        if token.startswith("-"):
+            continue
+        packages.append(token)
+    if not packages:
+        return True
+    # Every requested package must have an exact pin; a pinned package must
+    # not mask a second unpinned package on the same command line.
+    return any(not re.match(r"^[A-Za-z0-9_.-]+==[^\\s;]+$", token) for token in packages)
 
 def scan_static_tree(root: Path) -> List[Dict[str,Any]]:
     findings=[]
