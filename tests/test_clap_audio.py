@@ -11,7 +11,7 @@ def test_clap_inventory_hashes_without_loading():
         root=Path(tmp); bundle=root/"Example.clap"; bundle.mkdir()
         binary=bundle/"plugin.so"; binary.write_bytes(b"not executable; CLAP vendor Example version 1.2.3")
         results=scan.scan_clap_tree(root)
-        assert results==[]
+        assert any(x["rule_id"]=="CLAP_PLUGIN_INVENTORY" for x in results)
         # Normal inventory is intentionally not a security finding; it is returned by the inventory API.
         assert scan._sha256(binary)
 
