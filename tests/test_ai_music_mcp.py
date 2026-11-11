@@ -34,6 +34,11 @@ def test_static_rules():
         assert "UNPINNED_STARTUP_INSTALL" in ids
         assert "UNAUTHENTICATED_CONTROL_ROUTE" in ids
 
+def test_package_pin_detection():
+    assert not scanner._pip_install_is_unpinned("python -m pip install package==1.2.3")
+    assert scanner._pip_install_is_unpinned("pip install package==1.2.3 other-package")
+    assert not scanner._pip_install_is_unpinned("pip install --require-hashes -r requirements.txt")
+
 def test_cli_store_and_review():
     with tempfile.TemporaryDirectory() as tmp:
         root=Path(tmp); db=root/"h.db"; log=root/"mcp.jsonl"
@@ -44,6 +49,8 @@ def test_cli_store_and_review():
         assert "MCP_PATH_TRAVERSAL" in result.stdout
         report=subprocess.run([sys.executable,str(ROOT/"harness.py"),"--db",str(db),"report"],text=True,capture_output=True)
         assert "AI Music / DAW MCP" in report.stdout
+        assert "explanation" in report.stdout
+        assert "MCP tool 'render' requested" in report.stdout
         review=subprocess.run([sys.executable,str(ROOT/"harness.py"),"--db",str(db),"review","--id","1"],input="reviewed\nreviewer\nchecked trace\nsession-77\n",text=True,capture_output=True)
         assert review.returncode==0,review.stderr
         import sqlite3

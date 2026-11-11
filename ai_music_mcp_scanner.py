@@ -57,9 +57,9 @@ def _within_allowed(path: str, allowed: Sequence[str]) -> bool:
 
 def _absolute_allowlist(profile: Dict[str, Any]) -> List[str]:
     values = profile.get("allowed_output_dirs", [])
-    values = [str(x) for x in values if isinstance(x, str) and x.strip()] if isinstance(values, list) else []
+    values = [str(x) for x in values if isinstance(x, str) and x.strip() and _is_absolute(x)] if isinstance(values, list) else []
     env_dir = os.environ.get("PHANTOM_OUTPUT_DIR")
-    if env_dir: values.append(env_dir)
+    if env_dir and _is_absolute(env_dir): values.append(env_dir)
     return values
 
 def _number(arguments: Dict[str, Any], names: Sequence[str]) -> Optional[float]:

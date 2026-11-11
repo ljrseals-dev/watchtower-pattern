@@ -737,16 +737,17 @@ def cmd_report(args: argparse.Namespace, store: Store) -> int:
         if fp_rate > 30:
             print("  ⚠  Dismissed rate > 30% — thresholds or adapters may need tuning.")
     mcp_rows = store.conn.execute(
-        """SELECT surface, tool, rule_id, score, status, guidance
+        """SELECT surface, tool, rule_id, score, status, guidance, signals
            FROM findings WHERE surface='ai_music_mcp' ORDER BY id"""
     ).fetchall()
     print("AI Music / DAW MCP")
-    print("  surface       tool                 rule_id                         score  queued_for_review")
+    print("  surface | tool | rule_id | score | explanation | queued_for_review")
     for row in mcp_rows:
-        print(f"  {row['surface']:<13} {(row['tool'] or '')[:20]:<20} "
-              f"{(row['rule_id'] or '')[:30]:<30} {row['score']:.2f}   "
-              f"{'true' if row['status']=='open' else 'false'}")
-        print(f"    {row['guidance']}")
+        stored_signals = json.loads(row["signals"])
+        explanation = stored_signals[0].get("detail", "") if stored_signals else ""
+        print(f"  {row['surface']} | {row['tool'] or ''} | {row['rule_id'] or ''} | "
+              f"{row['score']:.2f} | {explanation} | {'true' if row['status']=='open' else 'false'}")
+        print(f"    Suggested action: {row['guidance']}")
     if not mcp_rows: print("  No AI music / DAW MCP findings.")
     print()
     print("Response tiers (advisory only):")
