@@ -73,6 +73,9 @@ def scan_clap_tree(root: Path) -> List[Dict[str, Any]]:
                 identifiers.append(s[:160])
         evidence={"bundle":str(bundle),"bundle_size_bytes":total,"binary_count":len(binaries),
                   "binary_hashes":hashes,"symlink_entries":symlinks[:50],"embedded_metadata_strings":list(dict.fromkeys(identifiers))[:50]}
+        findings.append(_finding("CLAP_PLUGIN_INVENTORY",.10,str(bundle),
+            "CLAP bundle inventoried by static filesystem metadata and bounded binary hashes; the plugin was not loaded or executed.",
+            "Compare the bundle path, binary hash, vendor/version strings, and package provenance with your approved plugin inventory.",evidence))
         if not binaries:
             findings.append(_finding("CLAP_BUNDLE_NO_BINARY",.45,str(bundle),
                 "A .clap bundle was found but no conventional plugin binary was identified. This may be a nonstandard layout or an incomplete installation.",
