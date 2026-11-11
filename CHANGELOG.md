@@ -19,3 +19,11 @@
 - Static rules C–E are heuristics, not proof of exploitation. Rule C detects mixed-script Unicode only; it does not claim to detect phonetic poisoning.
 - Rule B uses metadata and file size only. It never decodes audio.
 - The first CI run was recorded on this review branch; see the pull request checks for the exact tested commit.
+
+## CLAP / WAV review extension
+
+- Add read-only CLAP bundle inventory, bounded SHA-256 hashes, embedded metadata strings, symlink and unusual-footprint indicators.
+- Add bounded RIFF/RF64 WAV header checks for malformed chunk bounds, extreme channel/sample-rate values, and unusually long declared audio.
+- Add timestamped JSONL burst detection for repeated WAV/audio/render/import/decode operations per session and tool.
+- Add CLI options, review-queue/report integration, focused tests, and CI coverage.
+- No plugin loading, dynamic library inspection via execution, PCM decoding, audio rendering, DAW process control, or automatic blocking/quarantine.
