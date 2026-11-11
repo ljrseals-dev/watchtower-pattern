@@ -198,3 +198,8 @@ MIT. See [LICENSE](LICENSE).
 ## Companion documents
 
 If you need the operating-procedure companion (reviewer roles, on-call rotation, escalation paths, retention policy, incident-response runbook that plugs into `cmd_review`), open an issue or ask — it can be added under `docs/ops/`.
+
+
+## Research paper
+
+The accompanying research manuscript, **“The Trust Boundary You Forgot You Had: Threats Posed by AI-Coded Plugins and DAW Workstations, and a Human-in-the-Loop Architecture for Stopping Them,”** is available in [`docs/the-trust-boundary-ai-coded-plugins-daw-workstations.md`](docs/the-trust-boundary-ai-coded-plugins-daw-workstations.md). Its incident claims and references are author-supplied and require independent source verification before external publication.
