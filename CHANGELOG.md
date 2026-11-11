@@ -9,6 +9,7 @@
 - Preserve advisory-only behavior: no tool invocation, decoding, blocking, quarantine, package installation, or process control.
 - Add focused tests and CI execution for the extension.
 - Require every explicit package on a startup pip install line to be exactly pinned unless hash enforcement is enabled.
+- Print the source-derived MCP explanation in the report and ignore relative output allowlist entries.
 
 ### Review notes
 
