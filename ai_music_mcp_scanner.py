@@ -199,7 +199,7 @@ def _pip_install_is_unpinned(line: str) -> bool:
         return True
     # Every requested package must have an exact pin; a pinned package must
     # not mask a second unpinned package on the same command line.
-    return any(not re.match(r"^[A-Za-z0-9_.-]+==[^\\s;]+$", token) for token in packages)
+    return any(not PIN_RE.search(token) for token in packages)
 
 def scan_static_tree(root: Path) -> List[Dict[str,Any]]:
     findings=[]
