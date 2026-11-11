@@ -1,0 +1,26 @@
+# Contributing to Watchtower
+
+Thank you for considering a contribution.
+
+## Principles
+
+1. **Human-in-the-loop is non-negotiable.** Do not add automatic blocking, deletion, reporting, or any autonomous action.
+2. **No network calls from the core.** Telemetry, update checks, or "phone-home" features will be rejected.
+3. **Transparency over cleverness.** Scores must remain explainable. Opaque ML verdicts belong elsewhere.
+4. **No writing-style / typo / "AI-ness" scoring.** This is excluded by design.
+5. **Keep the core stdlib-only** unless there is a compelling, reviewed reason otherwise.
+
+## Development
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+python tests/test_smoke.py
+python harness.py --help
+```
+
+## Pull requests
+
+- One logical change per PR.
+- Update docs if you change behavior or add a signal kind.
+- Add or extend a smoke test when practical.
+- Never commit secrets, real baselines containing sensitive paths, or production databases.
