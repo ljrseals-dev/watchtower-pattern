@@ -196,7 +196,8 @@ watchtower/
 │   ├── 04-operating-the-harness.md
 │   ├── 05-honest-gaps.md
 │   ├── 06-ai-music-daw-mcp.md
-│   └── 07-clap-wav-audio.md
+│   ├── 07-clap-wav-audio.md
+│   └── the-trust-boundary-ai-coded-plugins-daw-workstations.md # Published research manuscript
 ├── adapters/               # Placeholder for future extracted adapters
 ├── examples/
 │   └── sample_auth.log
@@ -244,6 +245,8 @@ MIT. See [LICENSE](LICENSE).
 If you need the operating-procedure companion (reviewer roles, on-call rotation, escalation paths, retention policy, incident-response runbook that plugs into `cmd_review`), open an issue or ask — it can be added under `docs/ops/`.
 
 
-## Research paper
+## Published research report
 
-The accompanying research manuscript, **“The Trust Boundary You Forgot You Had: Threats Posed by AI-Coded Plugins and DAW Workstations, and a Human-in-the-Loop Architecture for Stopping Them,”** is available in [`docs/the-trust-boundary-ai-coded-plugins-daw-workstations.md`](docs/the-trust-boundary-ai-coded-plugins-daw-workstations.md). Its incident claims and references are author-supplied and require independent source verification before external publication.
+The accompanying research manuscript, **“The Trust Boundary You Forgot You Had: Threats Posed by AI-Coded Plugins and DAW Workstations, and a Human-in-the-Loop Architecture for Stopping Them,”** is published in this repository at [`docs/the-trust-boundary-ai-coded-plugins-daw-workstations.md`](docs/the-trust-boundary-ai-coded-plugins-daw-workstations.md).
+
+**Publication note:** The manuscript is a research document, not an independently validated incident report. Its incident claims and references are author-supplied and require independent source verification before external publication.
